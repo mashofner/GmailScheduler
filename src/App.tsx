@@ -11,7 +11,7 @@ function App() {
     <div className="min-h-screen bg-gray-100 p-6">
       <header className="mb-8">
         <h1 className="text-2xl font-bold text-gray-800 flex items-center">
-          Email Campaign Sender
+          Email Campaign Sender Test
         </h1>
         <p className="text-gray-600">Send scheduled emails to your contact list using Gmail</p>
       </header>
