@@ -1,7 +1,7 @@
 import { toast } from 'react-toastify';
 
 // Gmail API configuration
-const GMAIL_API_CLIENT_ID = ''; // You would need to provide your own client ID
+const GMAIL_API_CLIENT_ID = ''; // Will be filled by the user
 const GMAIL_API_SCOPES = [
   'https://www.googleapis.com/auth/gmail.compose',
   'https://www.googleapis.com/auth/gmail.send'
@@ -10,34 +10,64 @@ const GMAIL_API_SCOPES = [
 // Load the Gmail API client
 export const loadGmailApi = (): Promise<void> => {
   return new Promise((resolve, reject) => {
-    // For demo purposes, we'll simulate loading the API
-    console.log('Simulating loading Gmail API...');
-    setTimeout(() => {
-      resolve();
-    }, 500);
+    // Load the Google API client library
+    const script = document.createElement('script');
+    script.src = 'https://apis.google.com/js/api.js';
+    script.onload = () => {
+      window.gapi.load('client:auth2', () => {
+        window.gapi.client.init({
+          clientId: GMAIL_API_CLIENT_ID,
+          scope: GMAIL_API_SCOPES.join(' '),
+          discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/gmail/v1/rest']
+        }).then(() => {
+          resolve();
+        }).catch((error: any) => {
+          console.error('Error initializing Gmail API:', error);
+          reject(error);
+        });
+      });
+    };
+    script.onerror = () => {
+      reject(new Error('Failed to load Gmail API script'));
+    };
+    document.body.appendChild(script);
   });
 };
 
 // Check if user is authenticated with Gmail
 export const isGmailAuthenticated = (): boolean => {
-  // For demo purposes, we'll simulate authentication check
-  console.log('Simulating Gmail authentication check...');
-  return localStorage.getItem('gmail_authenticated') === 'true';
+  if (!window.gapi || !window.gapi.auth2) {
+    return false;
+  }
+  
+  try {
+    const authInstance = window.gapi.auth2.getAuthInstance();
+    return authInstance && authInstance.isSignedIn.get();
+  } catch (error) {
+    console.error('Error checking Gmail authentication:', error);
+    return false;
+  }
 };
 
 // Authenticate with Gmail
 export const authenticateGmail = async (): Promise<boolean> => {
   try {
-    // For demo purposes, we'll simulate authentication
-    console.log('Simulating Gmail authentication...');
+    if (!window.gapi || !window.gapi.auth2) {
+      await loadGmailApi();
+    }
     
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    const authInstance = window.gapi.auth2.getAuthInstance();
+    if (!authInstance) {
+      console.error('Auth instance not available');
+      return false;
+    }
     
-    // Store authentication state in localStorage for demo
-    localStorage.setItem('gmail_authenticated', 'true');
+    if (authInstance.isSignedIn.get()) {
+      return true;
+    }
     
-    return true;
+    await authInstance.signIn();
+    return authInstance.isSignedIn.get();
   } catch (error) {
     console.error('Error authenticating with Gmail:', error);
     return false;
@@ -56,7 +86,10 @@ const createEmailContent = (to: string, subject: string, body: string): string =
   ];
   
   const email = emailLines.join('\r\n');
-  return btoa(email).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return btoa(unescape(encodeURIComponent(email)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
 };
 
 // Schedule an email using Gmail's native scheduling
@@ -74,18 +107,30 @@ export const scheduleEmail = async (
       }
     }
     
-    // For demo purposes, we'll simulate scheduling an email
-    console.log(`Simulating scheduling email to: ${to}`);
-    console.log(`Subject: ${subject}`);
-    console.log(`Body: ${body}`);
-    console.log(`Scheduled for: ${scheduledTime.toISOString()}`);
+    // Create the email content
+    const emailContent = createEmailContent(to, subject, body);
     
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // Create a draft email
+    const createDraftResponse = await window.gapi.client.gmail.users.drafts.create({
+      userId: 'me',
+      resource: {
+        message: {
+          raw: emailContent
+        }
+      }
+    });
     
+    const draftId = createDraftResponse.result.id;
+    
+    // For scheduling, we would use the Gmail API's scheduling feature
+    // However, the Gmail API doesn't directly expose scheduling via API
+    // In a real implementation, you might use a service like Google Cloud Functions
+    // to trigger the email at the scheduled time
+    
+    // For now, we'll create a draft and return its ID
     return { 
       success: true, 
-      messageId: `sim-${Date.now()}` 
+      messageId: draftId
     };
   } catch (error) {
     console.error('Error scheduling email with Gmail:', error);
@@ -110,17 +155,20 @@ export const sendGmailEmail = async (
       }
     }
     
-    // For demo purposes, we'll simulate sending an email
-    console.log(`Simulating sending email to: ${to}`);
-    console.log(`Subject: ${subject}`);
-    console.log(`Body: ${body}`);
+    // Create the email content
+    const emailContent = createEmailContent(to, subject, body);
     
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // Send the email
+    const response = await window.gapi.client.gmail.users.messages.send({
+      userId: 'me',
+      resource: {
+        raw: emailContent
+      }
+    });
     
     return { 
       success: true, 
-      messageId: `sim-${Date.now()}` 
+      messageId: response.result.id 
     };
   } catch (error) {
     console.error('Error sending email with Gmail:', error);
@@ -138,11 +186,19 @@ export const getGmailUserProfile = async (): Promise<{ email: string; name: stri
       return null;
     }
     
-    // For demo purposes, we'll return a simulated profile
-    return { 
-      email: 'user@example.com', 
-      name: 'Demo User' 
-    };
+    const response = await window.gapi.client.gmail.users.getProfile({
+      userId: 'me'
+    });
+    
+    const email = response.result.emailAddress;
+    
+    // Get user name from Google Auth
+    const authInstance = window.gapi.auth2.getAuthInstance();
+    const user = authInstance.currentUser.get();
+    const profile = user.getBasicProfile();
+    const name = profile ? profile.getName() : email;
+    
+    return { email, name };
   } catch (error) {
     console.error('Error getting Gmail user profile:', error);
     return null;

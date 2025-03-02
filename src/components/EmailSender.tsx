@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { parseGoogleSheet } from '../utils/importUtils';
-import { sendEmail, scheduleEmailForLater, authorizeGmail, checkGmailAuth } from '../utils/emailUtils';
+import { sendEmail, scheduleEmailForLater, authorizeGmail, checkGmailAuth, loadGmailApi, getGmailUserProfile } from '../utils/emailUtils';
 import { useContactStore } from '../store/contactStore';
 import { useTemplateStore } from '../store/templateStore';
 import { useCampaignStore } from '../store/campaignStore';
 import { useEmailStore } from '../store/emailStore';
 import { parseTemplate } from '../utils/emailUtils';
-import { FileText, Send, Upload, Calendar, Users, Mail, CheckCircle, AlertCircle } from 'lucide-react';
+import { FileText, Send, Upload, Calendar, Users, Mail, CheckCircle, AlertCircle, ExternalLink } from 'lucide-react';
 
 const EmailSender: React.FC = () => {
   const [sheetUrl, setSheetUrl] = useState('');
@@ -20,6 +20,7 @@ const EmailSender: React.FC = () => {
   const [useGmailScheduling, setUseGmailScheduling] = useState(true);
   const [isGmailAuthorized, setIsGmailAuthorized] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [userProfile, setUserProfile] = useState<{ email: string; name: string } | null>(null);
   
   const { contacts, importContacts } = useContactStore();
   const { addTemplate } = useTemplateStore();
@@ -29,10 +30,21 @@ const EmailSender: React.FC = () => {
   // Check Gmail authorization on component mount
   useEffect(() => {
     const checkAuth = async () => {
-      setIsCheckingAuth(true);
-      const isAuthorized = await checkGmailAuth();
-      setIsGmailAuthorized(isAuthorized);
-      setIsCheckingAuth(false);
+      try {
+        setIsCheckingAuth(true);
+        await loadGmailApi();
+        const isAuthorized = await checkGmailAuth();
+        setIsGmailAuthorized(isAuthorized);
+        
+        if (isAuthorized) {
+          const profile = await getGmailUserProfile();
+          setUserProfile(profile);
+        }
+      } catch (error) {
+        console.error('Error checking Gmail auth:', error);
+      } finally {
+        setIsCheckingAuth(false);
+      }
     };
     
     checkAuth();
@@ -44,6 +56,8 @@ const EmailSender: React.FC = () => {
       setIsGmailAuthorized(success);
       
       if (success) {
+        const profile = await getGmailUserProfile();
+        setUserProfile(profile);
         toast.success('Successfully connected to Gmail');
       } else {
         toast.error('Failed to connect to Gmail');
@@ -306,9 +320,9 @@ Your Name`}
         
         <button
           onClick={handleTestEmail}
-          disabled={!emailSubject || !emailTemplate || contacts.length === 0}
+          disabled={!emailSubject || !emailTemplate || contacts.length === 0 || !isGmailAuthorized}
           className={`px-4 py-2 rounded-md mr-2 ${
-            !emailSubject || !emailTemplate || contacts.length === 0
+            !emailSubject || !emailTemplate || contacts.length === 0 || !isGmailAuthorized
               ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
               : 'bg-gray-600 text-white hover:bg-gray-700'
           }`}
@@ -343,22 +357,40 @@ Your Name`}
                     ? 'Gmail account connected' 
                     : 'Gmail account not connected'}
                 </h3>
+                {userProfile && (
+                  <p className="text-sm text-green-700 mt-1">
+                    Connected as: <strong>{userProfile.email}</strong> {userProfile.name && `(${userProfile.name})`}
+                  </p>
+                )}
                 <p className={`text-sm mt-1 ${
                   isGmailAuthorized ? 'text-green-700' : 'text-yellow-700'
                 }`}>
                   {isGmailAuthorized 
-                    ? 'You can use Gmail\'s native scheduling feature to schedule your emails.' 
-                    : 'Connect your Gmail account to use Gmail\'s native scheduling feature.'}
+                    ? 'You can use Gmail\'s native features to send your emails.' 
+                    : 'Connect your Gmail account to use Gmail\'s native features.'}
                 </p>
                 {!isGmailAuthorized && (
-                  <button
-                    onClick={handleGmailAuth}
-                    disabled={isCheckingAuth}
-                    className="mt-2 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex items-center"
-                  >
-                    <Mail className="h-4 w-4 mr-1" />
-                    {isCheckingAuth ? 'Checking...' : 'Connect Gmail Account'}
-                  </button>
+                  <div>
+                    <button
+                      onClick={handleGmailAuth}
+                      disabled={isCheckingAuth}
+                      className="mt-2 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex items-center"
+                    >
+                      <Mail className="h-4 w-4 mr-1" />
+                      {isCheckingAuth ? 'Checking...' : 'Connect Gmail Account'}
+                    </button>
+                    
+                    <div className="mt-2 text-sm text-yellow-700">
+                      <a 
+                        href="https://console.cloud.google.com/" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline flex items-center inline-flex"
+                      >
+                        Set up Gmail API credentials <ExternalLink className="h-3 w-3 ml-1" />
+                      </a>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>

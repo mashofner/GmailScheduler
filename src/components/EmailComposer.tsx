@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useContactStore } from '../store/contactStore';
 import { useTemplateStore } from '../store/templateStore';
 import { useEmailStore } from '../store/emailStore';
-import { parseTemplate, sendEmail } from '../utils/emailUtils';
+import { parseTemplate, sendEmail, checkGmailAuth } from '../utils/emailUtils';
 import { Contact } from '../types';
-import { Send, FileText, User } from 'lucide-react';
+import { Send, FileText, User, AlertCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 interface EmailComposerProps {
@@ -22,9 +22,20 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ contactId, onClose }) => 
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [isGmailAuthorized, setIsGmailAuthorized] = useState(false);
   
   // Get the selected contact
   const selectedContact = contacts.find((c) => c.id === selectedContactId);
+  
+  // Check Gmail authorization on component mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      const isAuthorized = await checkGmailAuth();
+      setIsGmailAuthorized(isAuthorized);
+    };
+    
+    checkAuth();
+  }, []);
   
   // Update subject and body when template changes
   useEffect(() => {
@@ -47,6 +58,11 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ contactId, onClose }) => 
   
   const handleSendEmail = async () => {
     if (!selectedContact) return;
+    
+    if (!isGmailAuthorized) {
+      toast.error('Please connect to Gmail first to send emails');
+      return;
+    }
     
     try {
       setIsSending(true);
@@ -97,6 +113,17 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ contactId, onClose }) => 
         <Send className="mr-2 h-5 w-5 text-blue-600" />
         Compose Email
       </h2>
+      
+      {!isGmailAuthorized && (
+        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md flex items-start">
+          <AlertCircle className="h-5 w-5 text-yellow-500 mr-2 mt-0.5" />
+          <div>
+            <p className="text-sm text-yellow-700">
+              Gmail account not connected. Please connect your Gmail account in the Gmail Integration tab to send emails.
+            </p>
+          </div>
+        </div>
+      )}
       
       <div className="space-y-4">
         <div>
@@ -179,9 +206,9 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ contactId, onClose }) => 
           <button
             type="button"
             onClick={handleSendEmail}
-            disabled={!selectedContactId || !subject || !body || isSending}
+            disabled={!selectedContactId || !subject || !body || isSending || !isGmailAuthorized}
             className={`px-4 py-2 rounded-md text-sm font-medium flex items-center ${
-              !selectedContactId || !subject || !body || isSending
+              !selectedContactId || !subject || !body || isSending || !isGmailAuthorized
                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 : 'bg-blue-600 text-white hover:bg-blue-700'
             }`}

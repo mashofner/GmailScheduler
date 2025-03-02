@@ -1,5 +1,5 @@
 import { Contact, EmailTemplate } from '../types';
-import { sendGmailEmail, scheduleEmail, isGmailAuthenticated, authenticateGmail } from './gmailApi';
+import { sendGmailEmail, scheduleEmail, isGmailAuthenticated, authenticateGmail, loadGmailApi, getGmailUserProfile } from './gmailApi';
 
 // Function to replace template variables with contact data
 export const parseTemplate = (template: string, contact: Contact): string => {
@@ -106,3 +106,6 @@ export const checkGmailAuth = async (): Promise<boolean> => {
     return false;
   }
 };
+
+// Export the Gmail API loading function
+export { loadGmailApi, getGmailUserProfile };

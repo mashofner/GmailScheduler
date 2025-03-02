@@ -1,28 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { authorizeGmail, checkGmailAuth } from '../utils/emailUtils';
-import { Mail, CheckCircle, AlertCircle, Info } from 'lucide-react';
+import { authorizeGmail, checkGmailAuth, loadGmailApi, getGmailUserProfile } from '../utils/emailUtils';
+import { Mail, CheckCircle, AlertCircle, Info, ExternalLink } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 const GmailIntegration: React.FC = () => {
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userProfile, setUserProfile] = useState<{ email: string; name: string } | null>(null);
   
   useEffect(() => {
-    const checkAuth = async () => {
+    const initGmailApi = async () => {
       try {
         setIsLoading(true);
+        await loadGmailApi();
         const authStatus = await checkGmailAuth();
         setIsAuthorized(authStatus);
+        
+        if (authStatus) {
+          const profile = await getGmailUserProfile();
+          setUserProfile(profile);
+        }
       } catch (err) {
-        setError('Failed to check authorization status');
+        setError('Failed to initialize Gmail API');
         console.error(err);
       } finally {
         setIsLoading(false);
       }
     };
     
-    checkAuth();
+    initGmailApi();
   }, []);
   
   const handleAuthorize = async () => {
@@ -31,7 +38,10 @@ const GmailIntegration: React.FC = () => {
       setError(null);
       const success = await authorizeGmail();
       setIsAuthorized(success);
+      
       if (success) {
+        const profile = await getGmailUserProfile();
+        setUserProfile(profile);
         toast.success('Successfully connected to Gmail');
       } else {
         setError('Authorization failed');
@@ -50,6 +60,7 @@ const GmailIntegration: React.FC = () => {
     // In a real implementation, this would revoke the OAuth token
     // For now, we'll just simulate disconnecting
     setIsAuthorized(false);
+    setUserProfile(null);
     toast.success('Disconnected from Gmail');
   };
   
@@ -80,8 +91,13 @@ const GmailIntegration: React.FC = () => {
               <h3 className="text-sm font-medium text-green-800">
                 Gmail account connected
               </h3>
+              {userProfile && (
+                <p className="text-sm text-green-700 mt-1">
+                  Connected as: <strong>{userProfile.email}</strong> {userProfile.name && `(${userProfile.name})`}
+                </p>
+              )}
               <p className="text-sm text-green-700 mt-1">
-                Your Gmail account is successfully connected. You can now use Gmail's native scheduling feature to schedule your emails.
+                Your Gmail account is successfully connected. You can now use Gmail's native features to send emails.
               </p>
               <button
                 className="mt-3 px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
@@ -100,7 +116,7 @@ const GmailIntegration: React.FC = () => {
                   Gmail account not connected
                 </h3>
                 <p className="text-sm text-yellow-700 mt-1">
-                  Connect your Gmail account to use Gmail's native scheduling feature for sending emails.
+                  Connect your Gmail account to send emails directly from the CRM.
                 </p>
               </div>
             </div>
@@ -129,17 +145,20 @@ const GmailIntegration: React.FC = () => {
           <Info className="h-5 w-5 text-blue-500 mr-2 mt-0.5" />
           <div>
             <h3 className="text-sm font-medium text-blue-800">
-              About Gmail Scheduling
+              Setting Up Gmail API
             </h3>
             <p className="text-sm text-blue-700 mt-1">
-              When connected to Gmail, this application can use Gmail's native scheduling feature to schedule your emails. This means:
+              To use Gmail integration, you need to set up a Google Cloud project and configure OAuth credentials:
             </p>
-            <ul className="list-disc list-inside text-sm text-blue-700 mt-2 space-y-1">
-              <li>Emails will appear in your Gmail "Scheduled" folder</li>
-              <li>You can cancel or edit scheduled emails directly in Gmail</li>
-              <li>Emails will be sent from your Gmail account even if you're offline</li>
-              <li>Gmail's sending limits and policies will apply</li>
-            </ul>
+            <ol className="list-decimal list-inside text-sm text-blue-700 mt-2 space-y-1 ml-2">
+              <li>Go to the <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center">Google Cloud Console <ExternalLink className="h-3 w-3 ml-1" /></a></li>
+              <li>Create a new project</li>
+              <li>Enable the Gmail API for your project</li>
+              <li>Configure OAuth consent screen</li>
+              <li>Create OAuth client ID credentials</li>
+              <li>Add your application's domain to authorized JavaScript origins</li>
+              <li>Copy the Client ID and update the GMAIL_API_CLIENT_ID in the application code</li>
+            </ol>
           </div>
         </div>
       </div>
